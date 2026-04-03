@@ -42,9 +42,7 @@ input[type="text"],input[type="number"],input[type="date"],select{width:100%;pad
 .step-box.blue{background:#eff6ff;border-color:#3b82f6}
 .step-box.green{background:#f0fdf4;border-color:#16a34a}
 .step-box strong{color:#b45309}
-.step-box.blue strong{color:#1d4ed8}
-
-.base-upload{border:2px dashed #2563eb;border-radius:8px;padding:24px;text-align:center;cursor:pointer;background:#f8faff;position:relative;transition:all .2s}
+.step-box.blue strong{color:#1d4ed8}b;border-radius:8px;padding:24px;text-align:center;cursor:pointer;background:#f8faff;position:relative;transition:all .2s}
 .base-upload:hover{background:#eff6ff;border-color:#1d4ed8}
 .base-upload input[type="file"]{position:absolute;inset:0;opacity:0;cursor:pointer}
 .base-upload .lbl{font-size:15px;font-weight:bold;color:#2563eb}
@@ -79,7 +77,7 @@ input[type="text"],input[type="number"],input[type="date"],select{width:100%;pad
 
 /* Flyer rendering */
 .products-grid{display:grid;gap:10px;padding:14px}
-.pcard{position:relative;overflow:hidden;box-shadow:0 2px 6px rgba(0,0,0,.1);text-align:center;min-height:220px;background:#fff}
+.pcard{position:relative;overflow:hidden;box-shadow:0 2px 6px rgba(0,0,0,.1);text-align:center;background:#fff}
 /* 商品画像をカード全面に */
 .pcard .pimg{position:absolute;inset:0;z-index:0}
 .pcard .pimg img{width:100%;height:100%;object-fit:cover;display:block}
@@ -127,7 +125,7 @@ input[type="text"],input[type="number"],input[type="date"],select{width:100%;pad
       <div class="section-header" onclick="tog(this)">① 元チラシ画像（ヘッダー＆フッター）</div>
       <div class="section-body">
         <div class="step-box blue">
-          元のチラシ画像をアップロードすると、<strong>ヘッダー</strong>（タイトル・日付篅囲）と<strong>フッター</strong>（会社情報・地図）は元画像そのまま使用し、<strong>商品エリアだけ</strong>をスプレッドシートのデータで自動生成します。<br>
+          元のチラシ画像をアップロードすると、<strong>ヘッダー</strong>（タイトル・日付範囲）と<strong>フッター</strong>（会社情報・地図）は元画像そのまま使用し、<strong>商品エリアだけ</strong>をスプレッドシートのデータで自動生成します。<br>
           ※ 初回のみアップロードが必要です。
         </div>
         <div class="base-upload" id="baseUpload">
@@ -174,7 +172,7 @@ input[type="text"],input[type="number"],input[type="date"],select{width:100%;pad
             </select>
           </div>
           <div style="display:flex;align-items:flex-end;padding-bottom:7px">
-            <button class="btn btn-outline btn-block" onclick="genFromRange()">📅 日付範囲で一括生成</button>
+            <button class="btn btn-outline btn-block" onclick="genFromRange()">📅 日付篅囲で一括生成</button>
           </div>
         </div>
         <div class="row" style="margin-bottom:6px">
@@ -363,31 +361,36 @@ function renderFlyer(){
   const cols=+document.getElementById('gridCols').value;
   const bg=document.getElementById('gridBg').value;
   const rad=document.getElementById('cRad').value;
-  const gap=document.getElementById('cGap').value;
+  const gap=+document.getElementById('cGap').value;
   const fw=+document.getElementById('fWidth').value;
   const hc=parseFloat(document.getElementById('headerCut').value)/100;
   const fc=parseFloat(document.getElementById('footerCut').value)/100;
 
+  // A4比率: 210mm x 297mm
+  const A4_RATIO = 297 / 210; // ≈ 1.4142
+  const totalH = Math.round(fw * A4_RATIO);
+
   let headerHTML='', footerHTML='';
+  let headerH=0, footerH=0;
 
   if(baseImg){
     const ar=baseH/baseW;
     const dh=fw*ar;
-    const hH=dh*hc;
-    const fH=dh*(1-fc);
-    // ヘッダー：元画像の上部をそのまま表示
-    headerHTML=`<div style="width:${fw}px;height:${hH}px;overflow:hidden;position:relative"><img src="${baseImg}" style="width:${fw}px;height:${dh}px;position:absolute;top:0;left:0;display:block"></div>`;
-    // フッター：元画像の下部をそのまま表示
-    footerHTML=`<div style="width:${fw}px;height:${fH}px;overflow:hidden;position:relative"><img src="${baseImg}" style="width:${fw}px;height:${dh}px;position:absolute;top:${-dh*fc}px;left:0;display:block"></div>`;
+    headerH=Math.round(dh*hc);
+    footerH=Math.round(dh*(1-fc));
+    headerHTML=`<div style="width:${fw}px;height:${headerH}px;overflow:hidden;position:relative"><img src="${baseImg}" style="width:${fw}px;height:${dh}px;position:absolute;top:0;left:0;display:block"></div>`;
+    footerHTML=`<div style="width:${fw}px;height:${footerH}px;overflow:hidden;position:relative"><img src="${baseImg}" style="width:${fw}px;height:${dh}px;position:absolute;top:${-dh*fc}px;left:0;display:block"></div>`;
   } else {
-    // 元画像未設定時のフォールバック
-    headerHTML=`<div style="width:${fw}px;background:repeating-conic-gradient(#ffd700 0deg 9deg,#ffb800 9deg 18deg);padding:40px 20px;text-align:center">
+    // フォールバック時は概算高さ
+    headerH=Math.round(totalH*0.18);
+    footerH=Math.round(totalH*0.19);
+    headerHTML=`<div style="width:${fw}px;height:${headerH}px;background:repeating-conic-gradient(#ffd700 0deg 9deg,#ffb800 9deg 18deg);padding:40px 20px;text-align:center;overflow:hidden">
       <div style="background:#cc0000;color:#fff;display:inline-block;padding:4px 14px;border-radius:20px;font-size:18px;font-weight:900;transform:rotate(-5deg)">緊急開催!!</div>
       <div style="font-size:28px;font-weight:900;color:#333;margin-top:6px">卸問屋の</div>
       <div style="font-size:52px;font-weight:900;color:#cc0000;text-shadow:3px 3px 0 #fff,-1px -1px 0 #fff,1px -1px 0 #fff,-1px 1px 0 #fff;letter-spacing:2px">倉庫開放大特価SALE!!</div>
       <div style="font-size:24px;font-weight:900;color:#333;margin-top:8px;background:rgba(255,255,255,.7);display:inline-block;padding:4px 16px;border-radius:8px">2026 2/25 <span style="background:#cc0000;color:#fff;padding:2px 8px;border-radius:10px;font-size:14px">水</span> <span style="color:#cc0000;margin:0 8px">▶</span> 2026 3/8 <span style="background:#cc0000;color:#fff;padding:2px 8px;border-radius:10px;font-size:14px">日</span></div>
     </div>`;
-    footerHTML=`<div style="width:${fw}px;background:#fff;padding:16px 20px;border-top:4px solid #cc0000">
+    footerHTML=`<div style="width:${fw}px;height:${footerH}px;background:#fff;padding:16px 20px;border-top:4px solid #cc0000;overflow:hidden">
       <div style="background:#f5f5f5;border:1px solid #ddd;border-radius:8px;padding:12px;margin-bottom:10px;display:flex;align-items:center;gap:14px">
         <div style="font-size:15px;font-weight:900;color:#cc0000;white-space:nowrap;line-height:1.3">一部に訳あり<br>商品を含みます</div>
         <div style="display:flex;gap:14px;font-size:11px;color:#666;text-align:center"><div>📦<br>箱の汚れ</div><div>⚡<br>小さな傷</div><div>✅<br>商品は問題なし</div><div>📊<br>過剰在庫</div></div>
@@ -399,26 +402,52 @@ function renderFlyer(){
     </div>`;
   }
 
+  // 商品エリアの高さを計算（A4全体 - ヘッダー - フッター）
+  const productAreaH = totalH - headerH - footerH;
+  const rows = Math.ceil(products.length / cols);
+  // gap分を引いた残りをカードに分配
+  const totalGapH = gap * (rows + 1); // padding上下 + 行間
+  const cardH = rows > 0 ? Math.floor((productAreaH - totalGapH) / rows) : 200;
+  // カード高さの下限・上限
+  const clampedCardH = Math.max(100, Math.min(cardH, 400));
+
+  // フォントサイズも商品数に応じて調整
+  const scale = clampedCardH / 220; // 基準220pxに対するスケール
+  const nameSize = Math.max(10, Math.min(16, Math.round(13 * scale)));
+  const priceSize = Math.max(20, Math.min(42, Math.round(36 * scale)));
+  const yenSize = Math.max(12, Math.min(22, Math.round(18 * scale)));
+  const discSize = Math.max(9, Math.min(14, Math.round(12 * scale)));
+  const discPctSize = Math.max(11, Math.min(18, Math.round(16 * scale)));
+  const badgeDdSize = Math.max(12, Math.min(24, Math.round(20 * scale)));
+  const badgeDwSize = Math.max(8, Math.min(13, Math.round(11 * scale)));
+  const badgePad = scale < 0.7 ? '1px 5px' : '2px 8px';
+  const noiSize = Math.max(24, Math.min(50, Math.round(50 * scale)));
+
   // 商品カード（画像全面＋テキスト重ね表示）
   const cards=products.map(p=>{
     const f=p.date?fd(p.date):{m:'',d:'?',w:''};
     const cls=p.date?dc(p.date):'';
-    const im=p.img?`<img src="${p.img}" alt="${p.name}">`:`<div class="noi">📦</div>`;
-    const di=p.discount>0?`<div class="disc"><span class="pct">${p.discount}%</span>OFF</div>`:'';
-    return`<div class="pcard" style="border-radius:${rad}px">
+    const im=p.img?`<img src="${p.img}" alt="${p.name}">`:`<div class="noi" style="font-size:${noiSize}px">📦</div>`;
+    const di=p.discount>0?`<div class="disc" style="font-size:${discSize}px"><span class="pct" style="font-size:${discPctSize}px">${p.discount}%</span>OFF</div>`:'';
+    return`<div class="pcard" style="border-radius:${rad}px;height:${clampedCardH}px">
       <div class="pimg">${im}</div>
-      <div class="dbadge ${cls}"><div class="dd">${f.m}.${f.d}</div><div class="dw">【${f.w}】</div></div>
-      <div class="pname-wrap"><div class="pname">${p.name||''}</div></div>
-      <div class="price-wrap">${di}<div class="pprice">${p.price.toLocaleString()}<span class="yen">円</span><span class="tax">(税込)</span></div></div>
+      <div class="dbadge ${cls}" style="padding:${badgePad}"><div class="dd" style="font-size:${badgeDdSize}px">${f.m}.${f.d}</div><div class="dw" style="font-size:${badgeDwSize}px">【${f.w}】</div></div>
+      <div class="pname-wrap"><div class="pname" style="font-size:${nameSize}px">${p.name||''}</div></div>
+      <div class="price-wrap">${di}<div class="pprice" style="font-size:${priceSize}px">${p.price.toLocaleString()}<span class="yen" style="font-size:${yenSize}px">円</span><span class="tax">(税込)</span></div></div>
     </div>`;
   }).join('');
 
-  document.getElementById('flyer').innerHTML=`
+  // A4情報表示
+  const a4Info = `<div style="position:absolute;top:4px;right:8px;font-size:10px;color:rgba(0,0,0,0.3);z-index:5">A4 (${fw}×${totalH}px)</div>`;
+
+  document.getElementById('flyer').innerHTML=`<div style="width:${fw}px;height:${totalH}px;position:relative;overflow:hidden;background:#fff">
+    ${a4Info}
     ${headerHTML}
-    <div class="products-grid" style="width:${fw}px;grid-template-columns:repeat(${cols},1fr);background:${bg};gap:${gap}px;padding:${gap}px">
+    <div class="products-grid" style="width:${fw}px;height:${productAreaH}px;grid-template-columns:repeat(${cols},1fr);grid-template-rows:repeat(${rows},${clampedCardH}px);background:${bg};gap:${gap}px;padding:${gap}px;overflow:hidden">
       ${cards}
     </div>
-    ${footerHTML}`;
+    ${footerHTML}
+  </div>`;
 }
 
 // Download
