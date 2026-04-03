@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>チラシジェネレーター - 週間セールチラシ自動生成</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Hiragino Kaku Gothic Pro','Yu Gothic','Meiryo',sans-serif;background:#f0f2f5;color:#333}
+.app{display:flex;min-height:100vh}
+.control-panel{width:460px;background:#fff;border-right:1px solid #ddd;flex-shrink:0;height:100vh;overflow-y:auto;padding:16px}
+.preview-panel{flex:1;display:flex;flex-direction:column;align-items:center;padding:24px;overflow-y:auto}
+
+.section{margin-bottom:14px;border:1px solid #e0e0e0;border-radius:8px;overflow:hidden}
+.section-header{background:#f8f9fa;padding:10px 14px;font-weight:bold;font-size:14px;border-bottom:1px solid #e0e0e0;cursor:pointer;display:flex;justify-content:space-between;align-items:center;user-select:none}
+.section-header:hover{background:#eef0f2}
+.section-header::after{content:'▼';font-size:10px;transition:transform .2s}
+.section-header.collapsed::after{transform:rotate(-90deg)}
+.section-body{padding:12px}
+.section-body.hidden{display:none}
+
+label{display:block;font-size:12px;font-weight:bold;margin-bottom:3px;color:#555}
+input[type="text"],input[type="number"],input[type="date"],select{width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:4px;font-size:13px;margin-bottom:7px}
+.row{display:flex;gap:8px}
+.row>div{flex:1}
+
+.btn{padding:7px 14px;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:bold;transition:all .15s}
+.btn-primary{background:#2563eb;color:#fff}
+.btn-primary:hover{background:#1d4ed8}
+.btn-success{background:#16a34a;color:#fff}
+.btn-success:hover{background:#15803d}
+.btn-danger{background:#dc2626;color:#fff;font-size:11px;padding:3px 7px}
+.btn-outline{background:#fff;color:#2563eb;border:1px solid #2563eb}
+.btn-outline:hover{background:#eff6ff}
+.btn-block{width:100%}
+
+.action-bar{position:sticky;top:0;background:#fff;padding:10px 0;border-bottom:1px solid #e0e0e0;margin-bottom:12px;z-index:10;display:flex;gap:6px;flex-wrap:wrap}
+
+/* Step 1: Base image */
+.step-box{background:#fffbeb;border:1px solid #f59e0b;border-radius:8px;padding:12px;margin-bottom:10px;font-size:12px;line-height:1.7}
+.step-box.blue{background:#eff6ff;border-color:#3b82f6}
+.step-box.green{background:#f0fdf4;border-color:#16a34a}
+.step-box strong{color:#b45309}
+.step-box.blue strong{color:#1d4ed8}
+
+.base-upload{border:2px dashed #2563eb;border-radius:8px;padding:24px;text-align:center;cursor:pointer;background:#f8faff;position:relative;transition:all .2s}
+.base-upload:hover{background:#eff6ff;border-color:#1d4ed8}
+.base-upload input[type="file"]{position:absolute;inset:0;opacity:0;cursor:pointer}
+.base-upload .lbl{font-size:15px;font-weight:bold;color:#2563eb}
+.base-upload .sub{font-size:11px;color:#888;margin-top:4px}
+.base-upload.done{border-style:solid;border-color:#16a34a;background:#f0fdf4}
+.base-upload.done .lbl{color:#16a34a}
+
+.crop-slider{margin-top:8px}
+.crop-slider label{font-size:11px;color:#555;display:flex;justify-content:space-between}
+.crop-slider input[type="range"]{width:100%;margin:2px 0 6px}
+
+.crop-preview-wrap{position:relative;margin-top:10px;border:1px solid #ddd;border-radius:6px;overflow:hidden}
+.crop-preview-wrap img{width:100%;display:block}
+.crop-line{position:absolute;left:0;right:0;height:2px;background:#cc0000;pointer-events:none;z-index:2}
+.crop-line::after{position:absolute;right:4px;top:-14px;font-size:10px;color:#cc0000;font-weight:bold}
+.crop-line.top::after{content:'▼ ヘッダー下端'}
+.crop-line.bottom::after{content:'▲ フッター上端'}
+.crop-region{position:absolute;left:0;right:0;pointer-events:none;z-index:1}
+.crop-region.header{top:0;background:rgba(37,99,235,0.12);border-bottom:none}
+.crop-region.footer{bottom:0;background:rgba(37,99,235,0.12);border-top:none}
+.crop-region.products{background:rgba(255,215,0,0.18)}
+
+/* Product editor */
+.product-item{background:#fafafa;border:1px solid #e0e0e0;border-radius:6px;padding:10px;margin-bottom:8px}
+.product-item .ph{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.product-item .pn{font-weight:bold;color:#2563eb;font-size:13px}
+.pg{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:5px}
+.img-up{border:2px dashed #ccc;border-radius:6px;padding:5px;text-align:center;cursor:pointer;min-height:45px;display:flex;align-items:center;justify-content:center;font-size:11px;color:#999;position:relative;overflow:hidden;grid-column:span 4}
+.img-up:hover{border-color:#2563eb}
+.img-up img{max-width:100%;max-height:60px;object-fit:contain}
+.img-up input[type="file"]{position:absolute;inset:0;opacity:0;cursor:pointer}
+
+/* Flyer rendering */
+.products-grid{display:grid;gap:10px;padding:14px}
+.pcard{position:relative;overflow:hidden;box-shadow:0 2px 6px rgba(0,0,0,.1);text-align:center;min-height:220px;background:#fff}
+/* 商品画像をカード全面に */
+.pcard .pimg{position:absolute;inset:0;z-index:0}
+.pcard .pimg img{width:100%;height:100%;object-fit:cover;display:block}
+.pcard .pimg .noi{width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#ddd;font-size:50px;background:#f5f5f5}
+/* 日付バッジ：左上 */
+.pcard .dbadge{position:absolute;top:6px;left:6px;background:rgba(255,255,255,0.92);border:2px solid #333;border-radius:6px;padding:2px 8px;text-align:center;line-height:1.2;z-index:3}
+.pcard .dbadge .dd{font-size:20px;font-weight:900}
+.pcard .dbadge .dw{font-size:11px;font-weight:bold}
+.pcard .dbadge.sun{border-color:#cc0000;color:#cc0000}
+.pcard .dbadge.sat{border-color:#0066cc;color:#0066cc}
+/* 商品名：上部に背景付きで重ねる */
+.pcard .pname-wrap{position:absolute;top:0;left:0;right:0;z-index:2;background:linear-gradient(180deg,rgba(255,255,255,0.88) 0%,rgba(255,255,255,0.75) 70%,rgba(255,255,255,0) 100%);padding:8px 8px 18px;text-align:right}
+.pcard .pname{font-size:13px;font-weight:bold;line-height:1.3;color:#333}
+/* 下部の価格エリア：背景付きで重ねる */
+.pcard .price-wrap{position:absolute;bottom:0;left:0;right:0;z-index:2;background:linear-gradient(0deg,rgba(255,255,255,0.95) 0%,rgba(255,255,255,0.88) 60%,rgba(255,255,255,0) 100%);padding:18px 6px 8px;text-align:center}
+.pcard .disc{display:inline-block;background:#cc0000;color:#fff;font-size:12px;font-weight:900;padding:2px 8px;border-radius:10px;margin-bottom:2px}
+.pcard .disc .pct{font-size:16px}
+.pcard .pprice{font-size:36px;font-weight:900;color:#cc0000;line-height:1}
+.pcard .pprice .yen{font-size:18px}
+.pcard .pprice .tax{font-size:11px;color:#666;font-weight:normal}
+
+.scale-ctrl{display:flex;align-items:center;gap:8px;margin-bottom:14px}
+.scale-ctrl label{margin:0;font-size:13px;white-space:nowrap}
+
+.toast{position:fixed;bottom:20px;right:20px;background:#333;color:#fff;padding:12px 20px;border-radius:8px;font-size:14px;z-index:1000;opacity:0;transition:opacity .3s;pointer-events:none}
+.toast.show{opacity:1}
+
+@media(max-width:1200px){.app{flex-direction:column}.control-panel{width:100%;height:auto;position:static}}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <div class="control-panel">
+    <div class="action-bar">
+      <button class="btn btn-primary" onclick="renderFlyer()">🔄 更新</button>
+      <button class="btn btn-success" onclick="downloadFlyer()">📥 画像DL</button>
+      <button class="btn btn-outline" onclick="document.getElementById('csvIn').click()">📂 CSV読込</button>
+      <input type="file" id="csvIn" accept=".csv,.tsv,.txt" style="display:none" onchange="loadCSV(event)">
+      <button class="btn btn-outline" onclick="exportCSV()">💾 CSV保存</button>
+    </div>
+
+    <!-- STEP 1 -->
+    <div class="section">
+      <div class="section-header" onclick="tog(this)">① 元チラシ画像（ヘッダー＆フッター）</div>
+      <div class="section-body">
+        <div class="step-box blue">
+          元のチラシ画像をアップロードすると、<strong>ヘッダー</strong>（タイトル・日付篅囲）と<strong>フッター</strong>（会社情報・地図）は元画像そのまま使用し、<strong>商品エリアだけ</strong>をスプレッドシートのデータで自動生成します。<br>
+          ※ 初回のみアップロードが必要です。
+        </div>
+        <div class="base-upload" id="baseUpload">
+          <div class="lbl">📷 元のチラシ画像をここにドロップ</div>
+          <div class="sub">PNG / JPG 対応</div>
+          <input type="file" accept="image/*" onchange="loadBase(event)">
+        </div>
+        <div id="cropArea" style="display:none">
+          <div class="crop-slider">
+            <label><span>ヘッダー下端</span><span id="hcVal">18%</span></label>
+            <input type="range" id="headerCut" min="5" max="50" value="18" step="0.5" oninput="updateCrop()">
+          </div>
+          <div class="crop-slider">
+            <label><span>フッター上端</span><span id="fcVal">81%</span></label>
+            <input type="range" id="footerCut" min="50" max="95" value="81" step="0.5" oninput="updateCrop()">
+          </div>
+          <div class="crop-preview-wrap" id="cropPreview">
+            <img id="cropImg">
+            <div class="crop-line top" id="cropLineTop"></div>
+            <div class="crop-line bottom" id="cropLineBottom"></div>
+            <div class="crop-region header" id="cropRegionH"></div>
+            <div class="crop-region products" id="cropRegionP"></div>
+            <div class="crop-region footer" id="cropRegionF"></div>
+          </div>
+          <div style="margin-top:6px;font-size:11px;color:#888;text-align:center">
+            赤い線をスライダーで調整し、ヘッダーとフッターの切り取り位置を決めてください
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 2 -->
+    <div class="section">
+      <div class="section-header" onclick="tog(this)">② 商品データ <span style="font-weight:normal;font-size:12px;color:#888" id="pCount">(0件)</span></div>
+      <div class="section-body">
+        <div class="step-box">
+          Googleスプレッドシートで下記の列を作成し、<br>「ファイル → ダウンロード → CSV」でエクスポート → 「CSV読込」で読み込みます。<br>
+          <code style="background:#f3f4f6;padding:2px 6px;border-radius:3px;font-size:12px">日付, 商品名, 価格, 割引率</code>
+        </div>
+        <div class="row" style="margin-bottom:6px">
+          <div><label>列数</label>
+            <select id="gridCols" onchange="renderFlyer()">
+              <option value="3">3列</option><option value="4" selected>4列</option><option value="5">5列</option>
+            </select>
+          </div>
+          <div style="display:flex;align-items:flex-end;padding-bottom:7px">
+            <button class="btn btn-outline btn-block" onclick="genFromRange()">📅 日付範囲で一括生成</button>
+          </div>
+        </div>
+        <div class="row" style="margin-bottom:6px">
+          <div><label>開始日</label><input type="date" id="startDate" value="2026-02-25"></div>
+          <div><label>終了日</label><input type="date" id="endDate" value="2026-03-08"></div>
+        </div>
+        <button class="btn btn-primary btn-block" onclick="addP()" style="margin-bottom:8px">＋ 商品を追加</button>
+        <div id="pList"></div>
+      </div>
+    </div>
+
+    <!-- STEP 3 -->
+    <div class="section">
+      <div class="section-header collapsed" onclick="tog(this)">③ 詳細設定</div>
+      <div class="section-body hidden">
+        <label>商品エリア背景色</label>
+        <div class="row">
+          <div><input type="text" id="gridBg" value="#ffd700" oninput="renderFlyer()"></div>
+          <div><input type="color" value="#ffd700" style="height:32px;padding:2px;width:100%" oninput="document.getElementById('gridBg').value=this.value;renderFlyer()"></div>
+        </div>
+        <label>カード角丸 (px)</label>
+        <input type="number" id="cRad" value="10" min="0" max="30" oninput="renderFlyer()">
+        <label>カード間余白 (px)</label>
+        <input type="number" id="cGap" value="10" min="0" max="30" oninput="renderFlyer()">
+        <label>チラシ幅 (px)</label>
+        <input type="number" id="fWidth" value="900" min="400" max="2000">
+        <button class="btn btn-primary btn-block" onclick="renderFlyer()" style="margin-top:4px">幅を適用</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Preview -->
+  <div class="preview-panel">
+    <div class="scale-ctrl">
+      <label>表示倍率:</label>
+      <input type="range" min="15" max="100" value="50" id="scaleS" oninput="updScale(this.value)">
+      <span id="scaleV">50%</span>
+    </div>
+    <div id="flyerWrap" style="transform-origin:top center;transform:scale(0.5)">
+      <div id="flyer"></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const WD=['日','月','火','水','木','金','土'];
+let products=[], baseImg=null, baseW=0, baseH=0;
+
+window.addEventListener('DOMContentLoaded',()=>{loadSample();renderPList();renderFlyer()});
+
+function loadSample(){
+  products=[
+    {date:'2026-02-25',name:'ルマンド',price:48,discount:57,img:''},
+    {date:'2026-02-26',name:'コバエホイホイ',price:198,discount:60,img:''},
+    {date:'2026-02-27',name:'ボンカレー甘',price:98,discount:30,img:''},
+    {date:'2026-02-28',name:'ハナノア3個入',price:1480,discount:50,img:''},
+    {date:'2026-03-01',name:'かどや ごま油',price:148,discount:60,img:''},
+    {date:'2026-03-02',name:'睡活ビネガー',price:348,discount:52,img:''},
+    {date:'2026-03-03',name:'有明のり',price:480,discount:60,img:''},
+    {date:'2026-03-04',name:'スパゲッティ',price:198,discount:50,img:''},
+    {date:'2026-03-05',name:'バタークッキー',price:48,discount:60,img:''},
+    {date:'2026-03-06',name:'赤から三番',price:148,discount:40,img:''},
+    {date:'2026-03-07',name:'ムシューダ32',price:398,discount:60,img:''},
+    {date:'2026-03-08',name:'コンソメ21入',price:98,discount:60,img:''}
+  ];
+}
+
+// UI
+function tog(h){h.classList.toggle('collapsed');h.nextElementSibling.classList.toggle('hidden')}
+function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500)}
+function updScale(v){document.getElementById('scaleV').textContent=v+'%';document.getElementById('flyerWrap').style.transform=`scale(${v/100})`}
+function wd(d){return WD[new Date(d+'T00:00:00').getDay()]}
+function dc(d){const w=new Date(d+'T00:00:00').getDay();return w===0?'sun':w===6?'sat':''}
+function fd(d){const t=new Date(d+'T00:00:00');return{m:t.getMonth()+1,d:t.getDate(),w:WD[t.getDay()]}}
+
+// Base Image
+function loadBase(ev){
+  const f=ev.target.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=e=>{
+    baseImg=e.target.result;
+    const img=new Image();
+    img.onload=()=>{
+      baseW=img.naturalWidth;baseH=img.naturalHeight;
+      const el=document.getElementById('baseUpload');
+      el.classList.add('done');
+      el.querySelector('.lbl').textContent='✅ '+f.name;
+      el.querySelector('.sub').textContent=`${baseW} × ${baseH}px`;
+      document.getElementById('cropArea').style.display='block';
+      document.getElementById('cropImg').src=baseImg;
+      updateCrop();
+      renderFlyer();
+    };
+    img.src=baseImg;
+  };
+  r.readAsDataURL(f);
+}
+
+function updateCrop(){
+  const hc=parseFloat(document.getElementById('headerCut').value);
+  const fc=parseFloat(document.getElementById('footerCut').value);
+  document.getElementById('hcVal').textContent=hc+'%';
+  document.getElementById('fcVal').textContent=fc+'%';
+  document.getElementById('cropLineTop').style.top=hc+'%';
+  document.getElementById('cropLineBottom').style.top=fc+'%';
+  document.getElementById('cropRegionH').style.height=hc+'%';
+  document.getElementById('cropRegionP').style.top=hc+'%';
+  document.getElementById('cropRegionP').style.height=(fc-hc)+'%';
+  document.getElementById('cropRegionF').style.height=(100-fc)+'%';
+  renderFlyer();
+}
+
+// Product List
+function renderPList(){
+  document.getElementById('pCount').textContent=`(${products.length}件)`;
+  document.getElementById('pList').innerHTML=products.map((p,i)=>{
+    const w=p.date?wd(p.date):'';
+    const ip=p.img?`<img src="${p.img}">`:'📷 商品画像';
+    return`<div class="product-item"><div class="ph"><span class="pn">#${i+1} ${p.date?p.date.slice(5)+' ('+w+')':''}</span><button class="btn btn-danger" onclick="rmP(${i})">✕</button></div><div class="pg"><div><label>日付</label><input type="date" value="${p.date}" onchange="upP(${i},'date',this.value)"></div><div><label>商品名</label><input type="text" value="${p.name}" onchange="upP(${i},'name',this.value)"></div><div><label>価格</label><input type="number" value="${p.price}" onchange="upP(${i},'price',+this.value)"></div><div><label>割引%</label><input type="number" value="${p.discount}" onchange="upP(${i},'discount',+this.value)"></div><div class="img-up">${ip}<input type="file" accept="image/*" onchange="upImg(${i},event)"></div></div></div>`;
+  }).join('');
+}
+function addP(){
+  let nd='';
+  if(products.length){const l=new Date(products[products.length-1].date+'T00:00:00');l.setDate(l.getDate()+1);nd=l.toISOString().slice(0,10);}
+  else nd=document.getElementById('startDate').value;
+  products.push({date:nd,name:'',price:0,discount:0,img:''});renderPList();
+}
+function rmP(i){products.splice(i,1);renderPList()}
+function upP(i,k,v){products[i][k]=v}
+function upImg(i,ev){
+  const f=ev.target.files[0];if(!f)return;
+  const r=new FileReader();r.onload=e=>{products[i].img=e.target.result;renderPList()};r.readAsDataURL(f);
+}
+function genFromRange(){
+  const s=new Date(document.getElementById('startDate').value+'T00:00:00');
+  const e=new Date(document.getElementById('endDate').value+'T00:00:00');
+  if(isNaN(s)||isNaN(e)||s>e){toast('有効な日付範囲を設定してください');return;}
+  products=[];const c=new Date(s);
+  while(c<=e){products.push({date:c.toISOString().slice(0,10),name:'',price:0,discount:0,img:''});c.setDate(c.getDate()+1);}
+  renderPList();toast(`${products.length}日分生成しました`);
+}
+
+// CSV
+function loadCSV(ev){
+  const f=ev.target.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=e=>{
+    const lines=e.target.result.trim().split('\n');
+    const sep=lines[0].includes('\t')?'\t':',';
+    let si=0;if(lines[0].toLowerCase().match(/日付|date|商品/))si=1;
+    const np=[];
+    for(let i=si;i<lines.length;i++){
+      const c=csvParse(lines[i],sep);if(c.length<3)continue;
+      let dt='';const dr=c[0].trim();
+      if(/^\d{4}-\d{2}-\d{2}$/.test(dr))dt=dr;
+      else if(/^\d{4}\/\d{1,2}\/\d{1,2}$/.test(dr)){const p=dr.split('/');dt=`${p[0]}-${p[1].padStart(2,'0')}-${p[2].padStart(2,'0')}`;}
+      np.push({date:dt,name:c[1]?.trim()||'',price:parseInt(c[2])||0,discount:parseInt(c[3])||0,img:''});
+    }
+    if(np.length){
+      products=np;
+      const ds=products.map(p=>p.date).filter(d=>d);
+      if(ds.length){document.getElementById('startDate').value=ds[0];document.getElementById('endDate').value=ds[ds.length-1];}
+      renderPList();renderFlyer();toast(`${np.length}件読み込みました`);
+    }else toast('データが見つかりません');
+  };
+  r.readAsText(f,'UTF-8');ev.target.value='';
+}
+function csvParse(line,sep){
+  if(sep==='\t')return line.split('\t');
+  const r=[];let c='',q=false;
+  for(let i=0;i<line.length;i++){const ch=line[i];if(q){if(ch==='"'&&line[i+1]==='"'){c+='"';i++}else if(ch==='"')q=false;else c+=ch}else{if(ch==='"')q=true;else if(ch===sep){r.push(c);c=''}else c+=ch}}
+  r.push(c);return r;
+}
+function exportCSV(){
+  let csv='日付,商品名,価格,割引率\n';
+  products.forEach(p=>csv+=`${p.date},"${p.name}",${p.price},${p.discount}\n`);
+  const b=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='chirashi_data.csv';a.click();
+  toast('CSV保存しました');
+}
+
+// ===== Render Flyer =====
+function renderFlyer(){
+  const cols=+document.getElementById('gridCols').value;
+  const bg=document.getElementById('gridBg').value;
+  const rad=document.getElementById('cRad').value;
+  const gap=document.getElementById('cGap').value;
+  const fw=+document.getElementById('fWidth').value;
+  const hc=parseFloat(document.getElementById('headerCut').value)/100;
+  const fc=parseFloat(document.getElementById('footerCut').value)/100;
+
+  let headerHTML='', footerHTML='';
+
+  if(baseImg){
+    const ar=baseH/baseW;
+    const dh=fw*ar;
+    const hH=dh*hc;
+    const fH=dh*(1-fc);
+    // ヘッダー：元画像の上部をそのまま表示
+    headerHTML=`<div style="width:${fw}px;height:${hH}px;overflow:hidden;position:relative"><img src="${baseImg}" style="width:${fw}px;height:${dh}px;position:absolute;top:0;left:0;display:block"></div>`;
+    // フッター：元画像の下部をそのまま表示
+    footerHTML=`<div style="width:${fw}px;height:${fH}px;overflow:hidden;position:relative"><img src="${baseImg}" style="width:${fw}px;height:${dh}px;position:absolute;top:${-dh*fc}px;left:0;display:block"></div>`;
+  } else {
+    // 元画像未設定時のフォールバック
+    headerHTML=`<div style="width:${fw}px;background:repeating-conic-gradient(#ffd700 0deg 9deg,#ffb800 9deg 18deg);padding:40px 20px;text-align:center">
+      <div style="background:#cc0000;color:#fff;display:inline-block;padding:4px 14px;border-radius:20px;font-size:18px;font-weight:900;transform:rotate(-5deg)">緊急開催!!</div>
+      <div style="font-size:28px;font-weight:900;color:#333;margin-top:6px">卸問屋の</div>
+      <div style="font-size:52px;font-weight:900;color:#cc0000;text-shadow:3px 3px 0 #fff,-1px -1px 0 #fff,1px -1px 0 #fff,-1px 1px 0 #fff;letter-spacing:2px">倉庫開放大特価SALE!!</div>
+      <div style="font-size:24px;font-weight:900;color:#333;margin-top:8px;background:rgba(255,255,255,.7);display:inline-block;padding:4px 16px;border-radius:8px">2026 2/25 <span style="background:#cc0000;color:#fff;padding:2px 8px;border-radius:10px;font-size:14px">水</span> <span style="color:#cc0000;margin:0 8px">▶</span> 2026 3/8 <span style="background:#cc0000;color:#fff;padding:2px 8px;border-radius:10px;font-size:14px">日</span></div>
+    </div>`;
+    footerHTML=`<div style="width:${fw}px;background:#fff;padding:16px 20px;border-top:4px solid #cc0000">
+      <div style="background:#f5f5f5;border:1px solid #ddd;border-radius:8px;padding:12px;margin-bottom:10px;display:flex;align-items:center;gap:14px">
+        <div style="font-size:15px;font-weight:900;color:#cc0000;white-space:nowrap;line-height:1.3">一部に訳あり<br>商品を含みます</div>
+        <div style="display:flex;gap:14px;font-size:11px;color:#666;text-align:center"><div>📦<br>箱の汚れ</div><div>⚡<br>小さな傷</div><div>✅<br>商品は問題なし</div><div>📊<br>過剰在庫</div></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:flex-end">
+        <div><div style="font-size:28px;font-weight:900">■Eve株式会社</div><div style="font-size:24px;font-weight:900">TEL 042-860-2110</div></div>
+        <div style="font-size:12px;color:#555;line-height:1.6;text-align:right">〒195-0063 東京都町田市野津田町１２０−１<br>営業時間 10:00-18:00</div>
+      </div>
+    </div>`;
+  }
+
+  // 商品カード（画像全面＋テキスト重ね表示）
+  const cards=products.map(p=>{
+    const f=p.date?fd(p.date):{m:'',d:'?',w:''};
+    const cls=p.date?dc(p.date):'';
+    const im=p.img?`<img src="${p.img}" alt="${p.name}">`:`<div class="noi">📦</div>`;
+    const di=p.discount>0?`<div class="disc"><span class="pct">${p.discount}%</span>OFF</div>`:'';
+    return`<div class="pcard" style="border-radius:${rad}px">
+      <div class="pimg">${im}</div>
+      <div class="dbadge ${cls}"><div class="dd">${f.m}.${f.d}</div><div class="dw">【${f.w}】</div></div>
+      <div class="pname-wrap"><div class="pname">${p.name||''}</div></div>
+      <div class="price-wrap">${di}<div class="pprice">${p.price.toLocaleString()}<span class="yen">円</span><span class="tax">(税込)</span></div></div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('flyer').innerHTML=`
+    ${headerHTML}
+    <div class="products-grid" style="width:${fw}px;grid-template-columns:repeat(${cols},1fr);background:${bg};gap:${gap}px;padding:${gap}px">
+      ${cards}
+    </div>
+    ${footerHTML}`;
+}
+
+// Download
+async function downloadFlyer(){
+  toast('画像を生成中...');
+  try{
+    const c=await html2canvas(document.getElementById('flyer'),{scale:2,useCORS:true,allowTaint:true,backgroundColor:'#fff',logging:false});
+    const a=document.createElement('a');
+    a.download=`チラシ_${document.getElementById('startDate').value}_${document.getElementById('endDate').value}.png`;
+    a.href=c.toDataURL('image/png');a.click();
+    toast('画像をダウンロードしました');
+  }catch(e){console.error(e);toast('エラー: '+e.message)}
+}
+</script>
+</body>
+</html>
